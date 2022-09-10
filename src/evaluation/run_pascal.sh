@@ -15,6 +15,8 @@ else
    echo "invalid ppi"
 fi
 
+mkdir -p $outpath
+
 
 #./Pascal --set=dream11_settings/settings_leaderboard_v3--2_ppi_anonym_v2.txt --runpathway=on --genescoring=sum\
 # --pval=$pvaldir/EUR.GLGC.jointGwasMc_TC.txt.gz\
