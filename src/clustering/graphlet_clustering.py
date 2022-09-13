@@ -6,22 +6,54 @@ import math
 import networkx as nx
 import pandas as pd
 import os
+#import markov_clustering as mc
 import random
 import matplotlib.pyplot as plt
 import time
-import os.path
+
+def prepare_network(G_initial,outdir,weighted=True):
+
+	if weighted:
+	    G=nx.read_weighted_edgelist(G_initial)
+	else:
+	    G=nx.read_edgelist(G_initial)
 
 
-def perform_clustering(G, outdir_beginning, orca_direct, orca_num):
+	# write to outdir.
+	G = nx.convert_node_labels_to_integers(G, first_label=0, ordering='default', label_attribute='ID')
+	pd.DataFrame(list(G.nodes('ID'))).to_csv('{}g_network_nodeid.txt'.format(outdir),sep='\t',header=False,index=False)
+	G.remove_edges_from(nx.selfloop_edges(G))
+
+	return G
+
+def final_modules(outdir):
+	
+	nodeid = pd.read_csv('{}/g_network_nodeid.txt'.format(outdir), sep = '\t', header=None)
+	nodeid = dict(zip(nodeid[0],nodeid[1]))
+	
+	for graphlet in range(0,30):
+		with open('{}/module_G{}.txt'.format(outdir,graphlet), 'w') as f1:    
+			with open('{}/clusters_G{}.txt'.format(outdir,graphlet)) as f2:
+				lines = f2.read().splitlines()
+				i=0
+				for line in lines:
+					if (len(line.split('\t'))>=3): #clusters larger than 2
+						f1.write(str(i)+'\t'+'1.0'+'\t')
+						for l in line.split('\t'):
+							f1.write(nodeid[int(l)]+'\t')
+						f1.write('\n')
+						i=i+1
+						
+
+def perform_clustering(G, outdir, weighted=True):
 	# make sure the outdir doesn't contain other large network files.
-	nx.write_edgelist(G,outdir_beginning+orca_direct+'g_network.txt',data=False,delimiter=" ")
-	os.system('sh files_for_orca.sh '+outdir_beginning+orca_direct)
-	os.system('sh execute_orca.sh edge '+orca_num+' '+outdir_beginning+orca_direct)
+	nx.write_edgelist(G,outdir+'g_network.txt',data=False,delimiter=" ")
+	os.system('sh files_for_orca.sh '+outdir)
+	os.system('sh execute_orca.sh edge 5 '+outdir)
 
-	print("1) reading csv files")
-	df = pd.read_csv(outdir_beginning+orca_direct+'g_network.txt.orca.ocount',sep=" ",header=None)
+	df = pd.read_csv(outdir+'g_network.txt.orca.ocount',sep=" ",header=None)
 
-	edges = pd.read_csv(outdir_beginning+orca_direct+'g_network.txt.orca',sep=" ",header=None,skiprows=1)
+	edges = pd.read_csv(outdir+'g_network.txt.orca',sep=" ",header=None,skiprows=1)
 
 	edgeorbit = {1: [0], 2: [1], 3: [2,3], 4:[4], 5:[5], 6:[6,7,8], 7:[9,10], 8:[11],
 			9: [12,13], 10:[14,15,16], 11:[17], 12:[18,19,20], 13:[21,22,23,24], 14:[25,26,27],15:[28],
@@ -30,23 +62,12 @@ def perform_clustering(G, outdir_beginning, orca_direct, orca_num):
 			28:[65,66], 29:[67]} # edge orbits counted from G1 (will manually add G0)
 	
 	n = G.number_of_nodes()
-	A = nx.to_pandas_adjacency(G)
-
-	
-
-	for graphlet in graphlet_num: # use 30 for up to five node graphlets.
-
-
-		# makes a directory for the specific graphlet, ie '../huri_out/G2'
-		outdir = outdir_beginning + 'G' + str(graphlet) + '/'
-		if os.path.isdir(outdir) == False:
-			directory = 'G' + str(graphlet)
-			path = os.path.join(outdir_beginning, directory)
-			os.makedirs(path) 
-			print("Directory '% s' created" % directory) 
-
-
-		print("2) Making probability matrix for G"+str(graphlet))
+	if weighted:
+		A = nx.to_pandas_adjacency(G, weight='weight')
+	else:
+		A = nx.to_pandas_adjacency(G)
+		
+	for graphlet in range(0,30): # use 30 for upto five node graphlets.
 
 		P = np.zeros(n*n).reshape(n,n)
 		if (graphlet==0):
@@ -57,132 +78,45 @@ def perform_clustering(G, outdir_beginning, orca_direct, orca_num):
 					P[i][j]=0.0
 
 		elif(graphlet > 0):
-			if type == 'unweighted':
-				print("made it here")
-				for index, i in edges.iterrows():
-					if (df.loc[index,edgeorbit[graphlet]].sum()>0):
-						P[i[0]][i[1]] = A[i[0]][i[1]]
-						P[i[1]][i[0]] = A[i[1]][i[0]]
-					if (i[0]==i[1]):
-						
-						P[i][j]=0.0
-			elif type == 'weighted':
-				for index, i in edges.iterrows():
-					orbit_total = df.loc[index,edgeorbit[graphlet]].sum()
-					if (orbit_total>0):
-						P[i[0]][i[1]] = orbit_total
-						P[i[1]][i[0]] = orbit_total
-					if (i[0]==i[1]):
-						P[i][j]=0.0
-
-		
+			for index, i in edges.iterrows():
+				if (df.loc[index,edgeorbit[graphlet]].sum()>0):
+					P[i[0]][i[1]]=A[i[0]][i[1]]
+					P[i[1]][i[0]]=A[i[1]][i[0]]
+				if (i[0]==i[1]):
+					P[i][j]=0.0
 
 		step1 = nx.to_networkx_graph(P)
-
+		nx.info(step1)
 		step2 = nx.to_edgelist(step1)
+		print(len(step2))
 
 		
-		
-		f = open(outdir+"intermed_G"+str(graphlet)+".txt", "w")
+		f = open("{}network_G{}.txt".format(outdir,graphlet), "w")
 		for line in step2:
-			weight_text = str(line[2])
-			weight_list = weight_text.split()
-			last_weight = weight_list[1]
-			weight = last_weight[:-1]
-			f.write(str(line[0])+"	"+str(line[1])+"	"+str(weight))
+			#f.write(str(line[0])+"	"+str(line[1])) #unweighted
+			f.write(str(line[0])+" "+str(line[1])+" "+str(line[2]['weight'])) #weighted
 			f.write("\n")
 		f.close()
 
-		print("3) running mcl & making "+outdir_beginning + "inflation_tests/G" +str(graphlet)+ "_I3.25")
 		# run mcl using the os module (like a command line)
-		os.system("mcl " +outdir+ "intermed_G" +str(graphlet)+ ".txt -I 3.25 --abc -o " +outdir_beginning + "inflation_tests/G" +str(graphlet)+ "_I3.25")
+		# I is the inflation parameter - set to 4
+		cmd = "mcl {}network_G{}.txt --abc -I 4 -o {}clusters_G{}.txt".format(outdir,graphlet,outdir,graphlet)
+		os.system(cmd)
 		
-		
+
+
+
+
 #specify the output directory.
-interact = input('Interactome: ')
-orca_num = input('Orca: ')
+outdir = '../../out/1_ppi_string/'
 
+#interactome 
+G_initial = '../../data/DREAM/1_networks/original/1_ppi_string_cutoff_8.txt'
 
-graphlet_num = [28,29]
-#[7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29]
-#[int(input('Graphlet: '))]
+weighted = True
 
+G = prepare_network(G_initial,outdir,weighted)
 
-# Graphs must be converted to simple txt files of the format 
-# node1		node2
-if interact == 'apc':
-	G_initial = '../data/interactomes/All_Pathway_Commons.txt'
-	outdir_beginning = '../apc_out/'
-	type = 'unweighted'
-if interact == 'weighted apc':
-	G_initial = '../data/interactomes/All_Pathway_Commons.txt'
-	outdir_beginning = '../weighted_apc_out/'
-	type = 'weighted'
-if interact == 'huri':
-	G_initial = '../data/interactomes/huri.tsv'
-	outdir_beginning = '../huri_out/'
-	type = 'unweighted'
-if interact == 'weighted huri':
-	G_initial = '../data/interactomes/huri.tsv'
-	outdir_beginning = '../weighted_huri_out/'
-	type = 'weighted'
-if interact == 'random six':
-	G_initial = '../data/interactomes/six_graph.txt'
-	outdir_beginning = '../random_six_out/'
-	type = 'unweighted'
-if interact == 'random one':
-	G_initial = '../data/interactomes/one_graph.txt'
-	outdir_beginning = '../random_one_out/'
-	type = 'unweighted'
-if interact == 'ppi':
-	G_initial = '../data/interactomes/PP-Pathways_ppi.csv'
-	outdir_beginning = '../ppi_out/'
-	type = 'unweighted'
+perform_clustering(G, outdir, weighted)
 
-
-if orca_num == '4':
-	orca_direct = 'orca4/'
-if orca_num == '5':
-	orca_direct = 'orca5/'
-if os.path.isdir(outdir_beginning+orca_direct) == False:
-		directory = orca_direct
-		path = os.path.join(outdir_beginning, directory)
-		os.makedirs(path) 
-		print("Directory '% s' created" % directory)
-
-if interact != 'ppi':
-	list_of_lists = []
-	Gi = open(G_initial, "r")
-	for line in Gi:
-		stripped_line = line.strip()
-		line_list = stripped_line.split()
-		list_of_lists.append(line_list)
-	Gi.close()
-	G = nx.from_edgelist(list_of_lists)
-if interact == 'ppi':
-	list_of_lists = []
-	Gi = open(G_initial, "r")
-	for line in Gi:
-		stripped_line = line.strip()
-		line_list = stripped_line.split(',')
-		list_of_lists.append(line_list)
-	Gi.close()
-	G = nx.from_edgelist(list_of_lists)
-
-
-
-# if node ids are not 0-n.
-G = nx.convert_node_labels_to_integers(G, first_label=0, ordering='default', label_attribute='ID')
-pd.DataFrame(list(G.nodes('ID'))).to_csv(outdir_beginning+orca_direct+'g_network_nodeid.txt',sep='\t',header=False,index=False)
-G.remove_edges_from(nx.selfloop_edges(G))
-
-
-#perform_clustering(G, outdir_beginning, orca_direct, orca_num)
-
-
-
-
-nx.write_edgelist(G,outdir_beginning+orca_direct+'g_network.txt',data=False,delimiter=" ")
-os.system('sh files_for_orca.sh '+outdir_beginning+orca_direct)
-os.system('sh execute_orca.sh edge '+orca_num+' '+outdir_beginning+orca_direct)
-
+final_modules(outdir)
