@@ -1,6 +1,12 @@
+# argument 1: path to the directory with clusters_G0 - G29.txt files 
+# relative to the current directory.
+#
+# argument 2: path to save the output 
+#
 import pandas as pd
 import numpy as np
 import os
+import sys
 import networkx as nx
 import matplotlib.pyplot as plt
 from sklearn.metrics.cluster import adjusted_rand_score
@@ -47,17 +53,24 @@ def get_ari_matrix(clusterdir, t):
 			ari_matrix[i][j]=adjusted_rand_score(x,y)
 	return ari_matrix
 
-def plot_ari(savepath,ari_matrix):
+def plot_ari(savepath,ari_matrix,plottitle):
 	plt.clf()
 	plt.matshow(ari_matrix)
 	plt.colorbar()
-	plt.title('1_ppi_string (weights > 0.8)')
+	plt.title(plottitle)
 	plt.savefig(savepath)
 
 
-clusterdir = '../../../../GitHub/graphlet-clustering/out/1_ppi_string/'
-outdir = '../../../../GitHub/graphlet-clustering/out/'
-savepath = outdir+'1_ppi_string'+'_ari.pdf'
+def main(argv):
+	clusterdir = argv[1] #'../../out/1_ppi_string/'
+	outdir = argv[2] #'../../out/'
+	if not os.path.exists(outdir):
+		os.makedirs(outdir)
+	savepath = outdir+clusterdir.split('/')[-2]+'_ari.pdf'
+	plottitle = clusterdir.split('/')[-2]
 
-ari_matrix = get_ari_matrix(clusterdir,3)
-plot_ari(savepath,ari_matrix)
+	ari_matrix = get_ari_matrix(clusterdir,3) # 2nd argument is the min. cluster size.
+	plot_ari(savepath,ari_matrix,plottitle)
+
+if __name__ == "__main__":
+	main(sys.argv)
