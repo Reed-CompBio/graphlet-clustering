@@ -17,9 +17,9 @@ def main():
     cancer_dict = map_by_cancer_types(tumor_dict,cancers)
 
     # write to outfiles
-    out1 = open('CGC_tier1.csv','w')
-    out2 = open('CGC_tier2.csv','w')
-    outboth = open('CGC_bothtiers.csv','w')
+    out1 = open('CGC_tier1.out','w')
+    out2 = open('CGC_tier2.out','w')
+    outboth = open('CGC_bothtiers.out','w')
     outid = open('cancer_ids.txt','w')
 
     for out in [out1,out2,outboth]:

@@ -20,7 +20,7 @@ The `csv` module is required.
 python process_cgc.py
 ```
 
-The output files include: `CGC_tier1.csv`,`CGC_tier2.csv`, and `CGC_bothtiers.csv`. They are in the same format as the SNAP dataset.
+The output files include: `CGC_tier1.out`,`CGC_tier2.out`, and `CGC_bothtiers.out`. They are in the same format as the SNAP dataset.
 
 The output file `cancer_ids.txt` maps the cancer ID to the (non-abbreviated) cancer name.
 
@@ -29,7 +29,7 @@ The output file `cancer_ids.txt` maps the cancer ID to the (non-abbreviated) can
 - Filter cancer types that have very few genes.
 
 ```
-cut -f 2 CGC_bothtiers.csv | sort | uniq -c | sort -grk1
+cut -f 2 CGC_bothtiers.out | sort | uniq -c | sort -grk1
 
 39 acute myeloid leukaemia
 19 T-cell acute lymphoblastic leukaemia
