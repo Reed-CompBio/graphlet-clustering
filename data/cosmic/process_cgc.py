@@ -3,36 +3,53 @@ import csv
 import os
 
 INFILE = 'cancer_gene_census.csv'
+ABBREVFILE = 'abbrevs.txt'
 
 def main():
 
     if not os.path.exists(INFILE):
         sys.exit("ERROR! %s does not exist in this directory. Refer to the README." % (INFILE))
 
+    abbrevs = read_abbrevs()
     mapping_dict,tumor_dict,cancers = read_file()
-    for c in cancers:
-        print('*',c,'*')
+    #for c in cancers:
+    #    print('*',c,'*')
     cancer_dict = map_by_cancer_types(tumor_dict,cancers)
 
     # write to outfiles
     out1 = open('CGC_tier1.csv','w')
     out2 = open('CGC_tier2.csv','w')
     outboth = open('CGC_bothtiers.csv','w')
+    outid = open('cancer_ids.txt','w')
 
     for out in [out1,out2,outboth]:
-        out.write('#CancerAbbrev\tCancer Name\tGene Symbol\n')
+        out.write('#CancerID\tCancer Name\tGene Symbol\n')
 
+    outid.write('#CancerID\tCancerName\n')
+
+    num = 1
     for c in cancer_dict:
+        name = 'CGC_%d' %(num)
+        num+=1
         for tier in ['1','2']:
             for n in cancer_dict[c][tier]:
                 if tier == '1':
-                    out1.write('%s\t%s\t%s\n' % (c,c,n))
+                    out1.write('%s\t%s\t%s\n' % (name,abbrevs.get(c,c),n))
                 elif tier == '2':
-                    out2.write('%s\t%s\t%s\n' % (c,c,n))
-                outboth.write('%s\t%s\t%s\n' % (c,c,n))
+                    out2.write('%s\t%s\t%s\n' % (name,abbrevs.get(c,c),n))
+                outboth.write('%s\t%s\t%s\n' % (name,abbrevs.get(c,c),n))
+        outid.write('%s\t%s\n' % (name,abbrevs.get(c,c)))
 
-    for out in [out1,out2,outboth]:
+    for out in [out1,out2,outboth,outid]:
         out.close()
+
+def read_abbrevs():
+    abbrevs = {}
+    with open(ABBREVFILE) as fin:
+        for line in fin:
+            row = line.strip().split()
+            abbrevs[row[0]] = ' '.join(row[1:])
+    return abbrevs
 
 def map_by_cancer_types(tumor_dict,cancers):
     cancer_dict = {}
