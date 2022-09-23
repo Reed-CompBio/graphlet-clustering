@@ -1,11 +1,19 @@
 # Motif/Graphlet enriched clusters. 
 # Clustering with respect to a given graphlet (up to size 5)
+# run with five arguments
+# - path to the PPI
+# - path to output directory
+# - graphlet size (4 or 5)
+# - weighted (enter 1 for weighted 0 for unweighted)
+# - inflation parameter 
+# 
 
 import numpy as np
 import math
 import networkx as nx
 import pandas as pd
 import os
+import sys
 #import markov_clustering as mc
 import random
 import matplotlib.pyplot as plt
@@ -14,9 +22,13 @@ import time
 def prepare_network(G_initial,outdir,weighted=True):
 
 	if weighted:
-	    G=nx.read_weighted_edgelist(G_initial)
+		G=nx.read_weighted_edgelist(G_initial,nodetype=str)
 	else:
-	    G=nx.read_edgelist(G_initial)
+		try:
+			G=nx.read_edgelist(G_initial,nodetype=str)
+		except:
+			df=pd.read_csv(G_initial,header=None)
+			G = nx.from_pandas_edgelist(df,source=0,target=1,edge_attr=None)
 
 
 	# write to outdir.
@@ -24,16 +36,26 @@ def prepare_network(G_initial,outdir,weighted=True):
 	pd.DataFrame(list(G.nodes('ID'))).to_csv('{}g_network_nodeid.txt'.format(outdir),sep='\t',header=False,index=False)
 	G.remove_edges_from(nx.selfloop_edges(G))
 
+	nx.write_edgelist(G,outdir+'g_network.txt',data=False,delimiter=" ")
+
 	return G
 
-def final_modules(outdir):
+def final_modules(outdir,inflation, Gs):
 	
 	nodeid = pd.read_csv('{}/g_network_nodeid.txt'.format(outdir), sep = '\t', header=None)
 	nodeid = dict(zip(nodeid[0],nodeid[1]))
 	
-	for graphlet in range(0,30):
-		with open('{}/module_G{}.txt'.format(outdir,graphlet), 'w') as f1:    
-			with open('{}/clusters_G{}.txt'.format(outdir,graphlet)) as f2:
+	if Gs == str(4):
+		gk=9
+	elif Gs == str(5):
+		gk=30
+	else:
+		print('Graphlet size should be 4 or 5')
+
+
+	for graphlet in range(0,gk):
+		with open('{}/module_{}_G{}.txt'.format(outdir,inflation,graphlet), 'w') as f1:    
+			with open('{}/clusters_{}_G{}.txt'.format(outdir,inflation,graphlet)) as f2:
 				lines = f2.read().splitlines()
 				i=0
 				for line in lines:
@@ -45,11 +67,15 @@ def final_modules(outdir):
 						i=i+1
 						
 
-def perform_clustering(G, outdir, weighted=True):
+def perform_clustering(G, outdir, inflation, Gs, weighted=True):
 	# make sure the outdir doesn't contain other large network files.
-	nx.write_edgelist(G,outdir+'g_network.txt',data=False,delimiter=" ")
-	os.system('sh files_for_orca.sh '+outdir)
-	os.system('sh execute_orca.sh edge 5 '+outdir)
+	#nx.write_edgelist(G,outdir+'g_network.txt',data=False,delimiter=" ")
+	
+	if not os.path.exists(outdir+'g_network.txt.orca.ocount'):
+		os.system('sh files_for_orca.sh '+outdir)
+		cmd='sh execute_orca.sh edge '+Gs+' '+outdir
+		print(cmd)
+		os.system(cmd)
 
 	df = pd.read_csv(outdir+'g_network.txt.orca.ocount',sep=" ",header=None)
 
@@ -66,8 +92,17 @@ def perform_clustering(G, outdir, weighted=True):
 		A = nx.to_pandas_adjacency(G, weight='weight')
 	else:
 		A = nx.to_pandas_adjacency(G)
-		
-	for graphlet in range(0,30): # use 30 for upto five node graphlets.
+
+
+	if Gs == str(4):
+		gk=9
+	elif Gs == str(5):
+		gk=30
+	else:
+		print('Graphlet size should be 4 or 5')
+
+
+	for graphlet in range(0,gk): # gk = 30 for upto five node graphlets.
 
 		P = np.zeros(n*n).reshape(n,n)
 		if (graphlet==0):
@@ -100,23 +135,43 @@ def perform_clustering(G, outdir, weighted=True):
 
 		# run mcl using the os module (like a command line)
 		# I is the inflation parameter - set to 4
-		cmd = "mcl {}network_G{}.txt --abc -I 4 -o {}clusters_G{}.txt".format(outdir,graphlet,outdir,graphlet)
+		cmd = "mcl {}network_G{}.txt --abc -I {} -o {}clusters_{}_G{}.txt".format(outdir,graphlet,inflation,outdir,inflation,graphlet)
 		os.system(cmd)
 		
 
 
 
+def main(argv):
 
-#specify the output directory.
-outdir = '../../out/1_ppi_string/'
+	#interactome 
+	G_initial = argv[1] #'../../data/DREAM/1_networks/original/1_ppi_string_cutoff_8.txt'
 
-#interactome 
-G_initial = '../../data/DREAM/1_networks/original/1_ppi_string_cutoff_8.txt'
+	#specify the output directory.
+	#outdir = '../../out/1_ppi_string/'
+	outdir = argv[2]
 
-weighted = True
+	if not os.path.exists(outdir):
+		os.makedirs(outdir)
 
-G = prepare_network(G_initial,outdir,weighted)
+	Gs = argv[3] #graphlet size (4 or 5)
 
-perform_clustering(G, outdir, weighted)
 
-final_modules(outdir)
+	#G_initial = '../../data/DREAM/1_networks/original/1_ppi_string_cutoff_8.txt'
+	#G_initial = '../../data/DREAM/1_networks/original/2_ppi_inweb_v2.txt'
+	#G_initial = '../../data/interactomes/All_Pathway_Commons.txt'
+
+	if (argv[4]=='1'):
+		weighted = True
+	else:
+		weighted = False
+
+	inflation = argv[5]
+
+	G = prepare_network(G_initial,outdir,weighted)
+
+	perform_clustering(G, outdir, inflation, Gs, weighted)
+
+	final_modules(outdir,inflation,Gs)
+
+if __name__ == "__main__":
+	main(sys.argv)
