@@ -7,6 +7,9 @@ moduledir=${1?Error: No module path given}
 outpath=${2?Error: No output path given}
 ppi=${3?Error: No PPI specified (enter 1 for string, 2 for inweb)}
 
+# example:
+# sh run_pascal.sh ../../out/1_ppi_string ../../out/pascaloutput_1_ppi_string 1
+
 if [[ $ppi -eq 1 ]]; then
 	setting=dream11_settings/settings_leaderboard_v3--1_ppi_anonym_v2.txt
 elif [[ $ppi -eq 2 ]]; then

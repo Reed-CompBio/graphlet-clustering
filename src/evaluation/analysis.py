@@ -2,23 +2,38 @@
 # relative to the current directory.
 #
 # argument 2: path to save the output 
+# argument 3: graphlet size
+# argument 4: inflation
+# 
+# python analysis.py ../../out/All_Pathway_Commons/ ../../out/ 4 4.0
 #
+
 import pandas as pd
 import numpy as np
 import os
 import sys
+from csv import reader
+from networkx.algorithms import approximation
 import networkx as nx
 import matplotlib.pyplot as plt
 from sklearn.metrics.cluster import adjusted_rand_score
+from scipy.stats import hypergeom
 
 
-def get_ari_matrix(clusterdir, t):
+def get_ari_matrix(clusterdir, t, inflation, Gs):
+
+	if Gs == str(4):
+		gk=9
+	elif Gs == str(5):
+		gk=30
+	else:
+		print('Graphlet size should be 4 or 5')
 
 	all_clusters=None
-	for g in range(0,30):
+	for g in range(0,gk):
 
 		clusters={}
-		cluster_file = clusterdir+'clusters_G'+str(g)+'.txt'
+		cluster_file = clusterdir+'clusters_'+str(inflation)+'_G'+str(g)+'.txt'
 		f2=open(cluster_file,'r')
 		lines = f2.read().splitlines()
 		i=0
@@ -45,21 +60,91 @@ def get_ari_matrix(clusterdir, t):
 			all_clusters=all_clusters.drop_duplicates(subset=['node'])
 			#print(len(all_clusters))
 
-	ari_matrix = np.zeros(30*30).reshape(30,30)
-	for i in range(30):
-		for j in range(30):
+	ari_matrix = np.zeros(gk*gk).reshape(gk,gk)
+	for i in range(gk):
+		for j in range(gk):
 			x = all_clusters[(all_clusters['freqG'+str(i)]>=t) & (all_clusters['freqG'+str(j)]>=t)]['G'+str(i)]
 			y = all_clusters[(all_clusters['freqG'+str(i)]>=t) & (all_clusters['freqG'+str(j)]>=t)]['G'+str(j)]
 			ari_matrix[i][j]=adjusted_rand_score(x,y)
 	return ari_matrix
 
-def plot_ari(savepath,ari_matrix,plottitle):
+def plot_ari(outdir,clusterdir,ari_matrix):
+	savepath = outdir+clusterdir.split('/')[-2]+'_ari.pdf'
+	plottitle = clusterdir.split('/')[-2]
 	plt.clf()
 	plt.matshow(ari_matrix)
 	plt.colorbar()
 	plt.title(plottitle)
-	plt.savefig(savepath)
+	plt.savefig(savepath, format='pdf',bbox_inches='tight')
 
+
+def plot_network_stats(outdir,clusterdir,Gs):
+	savepath = outdir+clusterdir.split('/')[-2]+'_network_properties.pdf'
+	plottitle = clusterdir.split('/')[-2]
+
+	nodes={}
+	edges={}
+	avgk={}
+	frac_nodes={}
+	frac_edges={}
+	density={}
+
+	if Gs == str(4):
+		gk=9
+	elif Gs == str(5):
+		gk=30
+	else:
+		print('Graphlet size should be 4 or 5')
+
+
+	for g in range(0,gk):
+		network_file = clusterdir+'network_G'+str(g)+'.txt'
+		G = nx.read_weighted_edgelist(network_file)
+		
+		nodes[g]=G.number_of_nodes()
+		edges[g]=G.number_of_edges()
+		
+		avgk[g]=2*edges[g]/nodes[g]
+		
+		frac_nodes[g]=G.number_of_nodes()/nodes[0]
+		frac_edges[g]=G.number_of_edges()/edges[0]
+		
+		density[g]=nx.density(G)
+
+	plt.figure(figsize=[15, 12])
+	plt.suptitle(plottitle)
+
+	plt.subplot(3, 2, 1)
+	plt.bar(*zip(*nodes.items()))
+	plt.xlabel('network (graphlet)')
+	plt.ylabel('number of nodes')
+
+	plt.subplot(3, 2, 2)
+	plt.bar(*zip(*edges.items()))
+	plt.xlabel('network (graphlet)')
+	plt.ylabel('number of edges')
+
+	plt.subplot(3, 2, 3)
+	plt.bar(*zip(*frac_nodes.items()))
+	plt.xlabel('network (graphlet)')
+	plt.ylabel('fraction of nodes remaining')
+
+	plt.subplot(3, 2, 4)
+	plt.bar(*zip(*frac_edges.items()))
+	plt.xlabel('network (graphlet)')
+	plt.ylabel('fraction of edges remaining')
+
+	plt.subplot(3, 2, 5)
+	plt.bar(*zip(*avgk.items()))
+	plt.xlabel('network (graphlet)')
+	plt.ylabel('average degree')
+
+	plt.subplot(3, 2, 6)
+	plt.bar(*zip(*density.items()))
+	plt.xlabel('network (graphlet)')
+	plt.ylabel('network density')
+
+	plt.savefig(savepath, format='pdf',bbox_inches='tight')
 
 # Hannah's functions
 
@@ -400,19 +485,20 @@ def hypergeo_dataframe(disease_gene_dict, cluster_index_array, all_clusters,P):
 	pd.DataFrame(H,columns=column_names,index = row_names).to_csv('ppi_dg_hypergeo.csv')
 
 
-
-
-
 def main(argv):
 	clusterdir = argv[1] #'../../out/1_ppi_string/'
 	outdir = argv[2] #'../../out/'
+	Gs = argv[3] #graphlet size
+	inflation = argv[4] #inflation
+
 	if not os.path.exists(outdir):
 		os.makedirs(outdir)
-	savepath = outdir+clusterdir.split('/')[-2]+'_ari.pdf'
-	plottitle = clusterdir.split('/')[-2]
 
-	ari_matrix = get_ari_matrix(clusterdir,3) # 2nd argument is the min. cluster size.
-	plot_ari(savepath,ari_matrix,plottitle)
+	ari_matrix = get_ari_matrix(clusterdir,3,inflation,Gs) # 2nd argument is the min. cluster size.
+	
+	plot_ari(outdir,clusterdir,ari_matrix)
+
+	plot_network_stats(outdir,clusterdir, Gs)
 
 if __name__ == "__main__":
 	main(sys.argv)
