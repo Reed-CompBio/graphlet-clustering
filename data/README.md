@@ -21,7 +21,11 @@ Interactomes are also provided in the `DREAM/` directory.
 - `MSigDB/canonical_KEGG/`: canonical pathway gene sets from KEGG*
 - `MSigDB/canonical_PID/`: canonical pathway gene sets from NCI-PID*
 
+Once these are processed, see instructions in the `mappers/` directory to map to different namespaces.
+
 ### Disease Gene Sets
+
+Once these are processed, see instructions in the `mappers/` directory to map to different namespaces.
 
 #### Multiple Diseases
 
