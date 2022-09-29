@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 #from sklearn.metrics.cluster import adjusted_rand_score
 #from sklearn.preprocessing import MultiLabelBinarizer
 from scipy.stats import hypergeom
+from statsmodels.stats.multitest import fdrcorrection
 
 
 def make_disease_gene_dictionary(interactome_dg_file):
@@ -30,6 +31,15 @@ def make_disease_gene_dictionary(interactome_dg_file):
 	Gi.close()
 	ppi_dg_dict.pop('#');
 	return(ppi_dg_dict)
+
+def make_disease_name_dictionary(interactome_dg_file):
+	Gi = pd.read_csv(interactome_dg_file,sep='\t')
+	Gi.drop(columns={'Gene ID'},inplace=True)
+	Gi.drop_duplicates(inplace=True)
+	Gi.rename(columns={'# Disease ID':'id','Disease Name':'name'},inplace=True)
+
+	dg_name_dict = dict(zip(Gi['id'],Gi['name']))
+	return(dg_name_dict)
 
 def convert_to_integers(unconverted,interactome_mcl_dir):
 	converted = []
@@ -119,20 +129,7 @@ def max_returns_index(ranlis):
 			mx_index = i
 	return(mx,mx_index)
 
-
-def main(argv):
-	outdir = argv[1] 
-	dg_file = argv[2]
-	inflation = 4.0
-
-	
-	#if not os.path.exists(outdir):
-	#	os.makedirs(outdir)
-
-	#dg_file = '../../data/snap/ppi_DG.tsv'
-	#outdir = '../../out/PP-Pathways_ppi/'
-
-	disease_gene_dict = make_disease_gene_dictionary(dg_file) #key: disease, value: list of genes
+def perform_hg_test(disease_name_dict,disease_gene_dict, outdir, total_genes=21538):
 	all_clusters,cluster_lengths = get_all_clusters(outdir)
 
 	ids_lis = []
@@ -148,57 +145,92 @@ def main(argv):
 		all_counts.append(target_counts)
 
 
-	P = np.zeros(len(disease_gene_dict)*30).reshape(30,len(disease_gene_dict))
-	significant_array = np.zeros(len(disease_gene_dict)*30).reshape(30,len(disease_gene_dict))
-	cluster_index_array = np.zeros(len(disease_gene_dict)*30).reshape(30,len(disease_gene_dict))
-	significant_labels = []
-	sig_counts = []
-
-	for j in range(519):
-		#print(j)
-		disease_counts_by_graphlet = []
-		target_counts = all_counts[j]
-		for i in range(30):
-			if len(target_counts[i]) > 0:
-					mx, mx_index = max_returns_index(target_counts[i])
-					cluster_index_array[i][j] = mx_index
-					P[i][j] = max(target_counts[i])
-					
-					disease_counts_by_graphlet.append(max(target_counts[i]))
-		if max(disease_counts_by_graphlet) > 4:
-			sig_counts.append(target_counts)
-			significant_labels.append(list(disease_gene_dict)[j])
-			for i in range(30):
-				if len(target_counts[i]) > 0:
-					significant_array[i][j] = max(target_counts[i])
-
-	H = np.zeros(519*30).reshape(30,519)
-
 	dg_list_sizes = []
 	for ids in disease_gene_dict:
 		dg_list_sizes.append(len(disease_gene_dict[ids]))
 
-	for j in range(519):
-		for i in range(30):
+	for i in range(30):
+		f = open(outdir+'enrichment_modules_G{}.txt'.format(i),'w')
+		for j in range(519):
+			#print(j)
+			target_counts = all_counts[j]
 
 			num_of_poss_dg = dg_list_sizes[j]
-			#total_dg_by_graphlet[i][j]
+				#total_dg_by_graphlet[i][j]
+		   
+			if len(target_counts[i]) > 0:
+					#mx, mx_index = max_returns_index(target_counts[i])
+					#cluster_index_array[i][j] = mx_index
+					#P[i][j] = max(target_counts[i])
+					for k in range(len(target_counts[i])):
+						correct_dg=target_counts[i][k]
+						chosen_cluster_size = len(all_clusters[i][k])
+						
+						#if (correct_dg>0): # this will bias the results
+						if (chosen_cluster_size>2): # include only clusters >= 3
+							#dis_id #genes in disease cluster #graphlet #cluster_id #cluster size #genes in common #p-value
+							#f.write('j '+str(j)+' '+str(num_of_poss_dg)+' i '+str(i)+' k '+str(k)+' common '+str(correct_dg)+' '+str(hypergeom.sf(correct_dg-1, total_genes, num_of_poss_dg, chosen_cluster_size))+'\n')
+							f.write(disease_name_dict[ids_lis[j]]+'\t'+str(num_of_poss_dg)+'\t'+str(i)+'\t'+str(k)+'\t'+str(chosen_cluster_size)+'\t'+str(correct_dg)+'\t'+str(hypergeom.sf(correct_dg-1, total_genes, num_of_poss_dg, chosen_cluster_size))+'\n')
+		f.close()
+
+def perform_enrichment(outdir):
+
+	t=0.05 #significance threshold
+
+	with open(outdir+'NS.txt', 'w') as fp1:
+		for i in range(30):
+			df = pd.read_csv(outdir+'enrichment_modules_G{}.txt'.format(i),
+							 sep='\t',header=None)
+			df[7] = fdrcorrection(df[6],t)[1]
+			df[8] = fdrcorrection(df[6],t)[0]
+			df.sort_values(by=7,inplace=True)
+			df=df[df[8]==True]
+			df.drop(columns={2,6,8},inplace=True) #2: graphlet
 			
-			total_genes = 21538
-			#total_genes_by_graphlet[i]
+			x=len(np.unique(df[3]))#sig. clusters
+			y=len(np.unique(df[0]))#sig. diseases
 
-			cor_cluster = int(cluster_index_array[i][j]) #corresponding cluster
-			chosen_cluster_size = len(all_clusters[i][cor_cluster])
+			fp1.write('G'+str(i)+'\t'+str(x)+'\t'+str(y)+'\n')
 
-			correct_dg = P[i][j]
+			df=df.rename(columns={0: 'Disease', 1:'DiseaseGenes',3:'ClusterID',4:'ClusterSize',5:'Common',7:'P-value'})
+			df.to_csv(outdir+'enrichment_modules_G{}.csv'.format(i),sep='\t',index=False)
 
-			H[i][j] = hypergeom.sf(correct_dg-1, total_genes, num_of_poss_dg, chosen_cluster_size)
 
-	row_names = list_of_strings(list(range(30)),'G')
-	#row_names.append('DG_size')
-	#H = np.vstack([H,dg_list_sizes])    
-	column_names = ids_lis
-	pd.DataFrame(H,columns=column_names,index = row_names).to_csv(outdir+'ppi_dg_hypergeo3_new.csv')
+
+	df = pd.read_csv(outdir+'NS.txt',sep='\t',header=None)
+
+	plt.clf()
+	plt.bar(df[0],df[1])
+	plt.xlabel('Graphlet')
+	plt.xticks(rotation=90)
+	plt.ylabel("No. of significant modules")
+	plt.savefig(outdir+'sig_modules.pdf',format='pdf',bbox_inches='tight')
+
+	plt.clf()
+	plt.bar(df[0],df[2])
+	plt.xlabel('Graphlet')
+	plt.xticks(rotation=90)
+	plt.ylabel("No. of significantly associated diseases")
+	plt.savefig(outdir+'sig_diseases.pdf',format='pdf',bbox_inches='tight')
+
+
+def main(argv):
+	outdir = argv[1] 
+	dg_file = argv[2]
+	inflation = 4.0
+
+	
+	#if not os.path.exists(outdir):
+	#	os.makedirs(outdir)
+
+	#dg_file = '../../data/snap/ppi_DG.tsv'
+	#outdir = '../../out/PP-Pathways_ppi/'
+
+	disease_gene_dict = make_disease_gene_dictionary(dg_file) #key: disease id, value: list of genes
+	disease_name_dict = make_disease_name_dictionary(dg_file) #key: disease id, value: disease name
+	perform_hg_test(disease_name_dict,disease_gene_dict,outdir)
+	perform_enrichment(outdir)
+
 
 if __name__ == "__main__":
 	main(sys.argv)
