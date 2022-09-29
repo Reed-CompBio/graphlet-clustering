@@ -33,13 +33,13 @@ def make_disease_gene_dictionary(interactome_dg_file):
 	return(ppi_dg_dict)
 
 def make_disease_name_dictionary(interactome_dg_file):
-    Gi = pd.read_csv(interactome_dg_file,sep='\t')
-    Gi.drop(columns={'Gene ID'},inplace=True)
-    Gi.drop_duplicates(inplace=True)
-    Gi.rename(columns={'# Disease ID':'id','Disease Name':'name'},inplace=True)
+	Gi = pd.read_csv(interactome_dg_file,sep='\t')
+	Gi.drop(columns={'Gene ID'},inplace=True)
+	Gi.drop_duplicates(inplace=True)
+	Gi.rename(columns={'# Disease ID':'id','Disease Name':'name'},inplace=True)
 
-    dg_name_dict = dict(zip(Gi['id'],Gi['name']))
-    return(dg_name_dict)
+	dg_name_dict = dict(zip(Gi['id'],Gi['name']))
+	return(dg_name_dict)
 
 def convert_to_integers(unconverted,interactome_mcl_dir):
 	converted = []
@@ -166,11 +166,52 @@ def perform_hg_test(disease_name_dict,disease_gene_dict, outdir, total_genes=215
 						correct_dg=target_counts[i][k]
 						chosen_cluster_size = len(all_clusters[i][k])
 						
-						if (correct_dg>0):
+						#if (correct_dg>0): # this will bias the results
+						if (chosen_cluster_size>2): # include only clusters >= 3
 							#dis_id #genes in disease cluster #graphlet #cluster_id #cluster size #genes in common #p-value
 							#f.write('j '+str(j)+' '+str(num_of_poss_dg)+' i '+str(i)+' k '+str(k)+' common '+str(correct_dg)+' '+str(hypergeom.sf(correct_dg-1, total_genes, num_of_poss_dg, chosen_cluster_size))+'\n')
 							f.write(disease_name_dict[ids_lis[j]]+'\t'+str(num_of_poss_dg)+'\t'+str(i)+'\t'+str(k)+'\t'+str(chosen_cluster_size)+'\t'+str(correct_dg)+'\t'+str(hypergeom.sf(correct_dg-1, total_genes, num_of_poss_dg, chosen_cluster_size))+'\n')
 		f.close()
+
+def perform_enrichment(outdir):
+
+	t=0.05 #significance threshold
+
+	with open(outdir+'NS.txt', 'w') as fp1:
+		for i in range(30):
+			df = pd.read_csv(outdir+'enrichment_modules_G{}.txt'.format(i),
+							 sep='\t',header=None)
+			df[7] = fdrcorrection(df[6],t)[1]
+			df[8] = fdrcorrection(df[6],t)[0]
+			df.sort_values(by=7,inplace=True)
+			df=df[df[8]==True]
+			df.drop(columns={2,6,8},inplace=True) #2: graphlet
+			
+			x=len(np.unique(df[3]))#sig. clusters
+			y=len(np.unique(df[0]))#sig. diseases
+
+			fp1.write('G'+str(i)+'\t'+str(x)+'\t'+str(y)+'\n')
+
+			df=df.rename(columns={0: 'Disease', 1:'DiseaseGenes',3:'ClusterID',4:'ClusterSize',5:'Common',7:'P-value'})
+			df.to_csv(outdir+'enrichment_modules_G{}.csv'.format(i),sep='\t',index=False)
+
+
+
+	df = pd.read_csv(outdir+'NS.txt',sep='\t',header=None)
+
+	plt.clf()
+	plt.bar(df[0],df[1])
+	plt.xlabel('Graphlet')
+	plt.xticks(rotation=90)
+	plt.ylabel("No. of significant modules")
+	plt.savefig(outdir+'sig_modules.pdf',format='pdf',bbox_inches='tight')
+
+	plt.clf()
+	plt.bar(df[0],df[2])
+	plt.xlabel('Graphlet')
+	plt.xticks(rotation=90)
+	plt.ylabel("No. of significantly associated diseases")
+	plt.savefig(outdir+'sig_diseases.pdf',format='pdf',bbox_inches='tight')
 
 
 def main(argv):
@@ -188,7 +229,7 @@ def main(argv):
 	disease_gene_dict = make_disease_gene_dictionary(dg_file) #key: disease id, value: list of genes
 	disease_name_dict = make_disease_name_dictionary(dg_file) #key: disease id, value: disease name
 	perform_hg_test(disease_name_dict,disease_gene_dict,outdir)
-	
+	perform_enrichment(outdir)
 
 
 if __name__ == "__main__":
