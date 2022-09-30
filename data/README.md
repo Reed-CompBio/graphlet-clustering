@@ -6,11 +6,14 @@ Datasets with asterisks require registration to access the data or have some oth
 
 These are undirected but potentially weighted protein-protein interaction networks.
 
-- `interactomes/All_Pathway_Commons.txt`
-- `interactomes/PP-Pathways_ppi.csv`: protein interaction network from SNAP ([PP-Pathways](https://snap.stanford.edu/biodata/datasets/10000/10000-PP-Pathways.html))
-- `interactomes/huri.tsv`: Human Reference Interactome ([HuRI](http://www.interactome-atlas.org/))
+- `interactomes/All_Pathway_Commons.txt` [namespace: *Symbol*]
+- `interactomes/PP-Pathways_ppi.csv`: protein interaction network from SNAP ([PP-Pathways](https://snap.stanford.edu/biodata/datasets/10000/10000-PP-Pathways.html)) [namespace: *Entrez*]
+- `interactomes/huri.tsv`: Human Reference Interactome ([HuRI](http://www.interactome-atlas.org/)) [namespace: *Ensembl*]
 
-Interactomes are also provided in the `DREAM/` directory.
+Additionally, we use the following two interactomes provided with the DREAM challenge:
+
+- `DREAM/1_networks/original/1_ppi_string_v2.txt` [namespace: *Symbol*]
+- `DREAM/1_networks/original/2_ppi_inweb_v2.txt` [namespace: *Symbol*]
 
 - **TODO fill in**
 
