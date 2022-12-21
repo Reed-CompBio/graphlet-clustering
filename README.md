@@ -1,6 +1,16 @@
 # graphlet-clustering
 
-To use ORCA 
+This repo contains code for graphlet-based community detection in Protein-Protein Interaction (PPI) netowrks. 
+
+## Directory Contents
+
+- **src**: source code.
+
+- **data**: Interactomes, biological pathway gene sets, disease gene sets, DREAM challenge datasets and scoring tools.
+
+
+Our method code uses ORbit Counting Algorithm (ORCA) for computing edge-orbits. To use ORCA run the following commands:
+
 ```
 git submodule init
 git submodule update
