@@ -13,32 +13,40 @@ from scipy.stats import hypergeom
 from statsmodels.stats.multitest import fdrcorrection
 
 
-def make_disease_gene_dictionary(interactome_dg_file):
-	Gi = open(interactome_dg_file, "r")
+def get_gene_population(outdir):
+	nodefile = outdir+'g_network_nodeid.txt'
+	genes = pd.read_csv(nodefile,sep='\t',header=None,dtype=str)
+	gene_pop = list(set(genes[1]))
+	return(gene_pop)
+
+def make_disease_gene_dictionary(interactome_dg_file, gene_pop):
+	G_initial = interactome_dg_file
+	ith_clusters = []
+	ith_lengths = []
+
+	Gi = open(G_initial, "r")
 	ppi_dg_dict = {}
-	for line in Gi:
+	lines = Gi.readlines()[1:]
+	for line in lines:
 		stripped_line = line.strip()
 		line_list = stripped_line.split()
 		disease_id = line_list[0]
 		gene_id = line_list[-1]
-		
-		if disease_id in ppi_dg_dict:
-			updated_list = ppi_dg_dict[disease_id]
-			updated_list.append(gene_id)  
-			ppi_dg_dict[disease_id] = updated_list
-		else:
-			ppi_dg_dict[disease_id] = [gene_id]
+		if gene_id in gene_pop:
+			if disease_id in ppi_dg_dict:
+				updated_list = ppi_dg_dict[disease_id]
+				updated_list.append(gene_id)  
+				ppi_dg_dict[disease_id] = updated_list
+			else:
+				ppi_dg_dict[disease_id] = [gene_id]
 	Gi.close()
-	ppi_dg_dict.pop('#');
 	return(ppi_dg_dict)
 
 def make_disease_name_dictionary(interactome_dg_file):
 	Gi = pd.read_csv(interactome_dg_file,sep='\t')
-	Gi.drop(columns={'Gene ID'},inplace=True)
+	Gi.drop(Gi.iloc[:,[2]],axis = 1,inplace=True)
 	Gi.drop_duplicates(inplace=True)
-	Gi.rename(columns={'# Disease ID':'id','Disease Name':'name'},inplace=True)
-
-	dg_name_dict = dict(zip(Gi['id'],Gi['name']))
+	dg_name_dict = dict(zip(Gi.iloc[:,0],Gi.iloc[:,1]))
 	return(dg_name_dict)
 
 def convert_to_integers(unconverted,interactome_mcl_dir):
@@ -54,13 +62,13 @@ def convert_to_integers(unconverted,interactome_mcl_dir):
 	Gi.close()
 	return(converted)
 
-def get_all_clusters(outdir):
+def get_all_clusters(outdir,inflation):
 	all_clusters = []
 	cluster_lengths = []
 	
-	for i in range(30):
+	for i in range(1):
 
-		G_initial = outdir+'clusters_G'+str(i)+'.txt' #'inflation_tests/G'+str(i)+'_I3.0'
+		G_initial = outdir+'clusters_'+str(inflation)+'_G'+str(i)+'.txt' #'inflation_tests/G'+str(i)+'_I3.0'
 		ith_clusters = []
 		ith_lengths = []
 	
@@ -113,6 +121,7 @@ def get_target_counts(all_clusters,target_nodes):
 
 	return(all_target_counts)
 
+'''
 def list_of_strings(list,prefix='',suffix=''):
 	return_list = []
 	for item in list:
@@ -128,9 +137,17 @@ def max_returns_index(ranlis):
 			mx = ranlis[i]
 			mx_index = i
 	return(mx,mx_index)
+'''
 
-def perform_hg_test(disease_name_dict,disease_gene_dict, outdir, total_genes=21538):
-	all_clusters,cluster_lengths = get_all_clusters(outdir)
+def perform_hg_test(dg_file, outdir, inflation, dg_file_name):
+	all_clusters,cluster_lengths = get_all_clusters(outdir,inflation)
+
+
+	gene_pop = get_gene_population(outdir)
+	total_genes = len(gene_pop)
+
+	disease_gene_dict = make_disease_gene_dictionary(dg_file,gene_pop) #key: disease id, value: list of genes
+	disease_name_dict = make_disease_name_dictionary(dg_file) #key: disease id, value: disease name
 
 	ids_lis = []
 	for ids in disease_gene_dict:
@@ -149,9 +166,13 @@ def perform_hg_test(disease_name_dict,disease_gene_dict, outdir, total_genes=215
 	for ids in disease_gene_dict:
 		dg_list_sizes.append(len(disease_gene_dict[ids]))
 
-	for i in range(30):
-		f = open(outdir+'enrichment_modules_G{}.txt'.format(i),'w')
-		for j in range(519):
+	
+
+	n_d = len(dg_list_sizes)
+
+	for i in range(1):
+		f = open(outdir+'enrichment_modules_{}_G{}_{}.txt'.format(inflation,i,dg_file_name),'w')
+		for j in range(n_d):
 			#print(j)
 			target_counts = all_counts[j]
 
@@ -173,13 +194,13 @@ def perform_hg_test(disease_name_dict,disease_gene_dict, outdir, total_genes=215
 							f.write(disease_name_dict[ids_lis[j]]+'\t'+str(num_of_poss_dg)+'\t'+str(i)+'\t'+str(k)+'\t'+str(chosen_cluster_size)+'\t'+str(correct_dg)+'\t'+str(hypergeom.sf(correct_dg-1, total_genes, num_of_poss_dg, chosen_cluster_size))+'\n')
 		f.close()
 
-def perform_enrichment(outdir):
+def perform_enrichment(outdir, dg_file_name, inflation):
 
 	t=0.05 #significance threshold
 
-	with open(outdir+'NS.txt', 'w') as fp1:
-		for i in range(30):
-			df = pd.read_csv(outdir+'enrichment_modules_G{}.txt'.format(i),
+	with open(outdir+'NS_{}.txt'.format(dg_file_name), 'w') as fp1:
+		for i in range(1):
+			df = pd.read_csv(outdir+'enrichment_modules_{}_G{}_{}.txt'.format(inflation,i,dg_file_name),
 							 sep='\t',header=None)
 			df[7] = fdrcorrection(df[6],t)[1]
 			df[8] = fdrcorrection(df[6],t)[0]
@@ -193,31 +214,31 @@ def perform_enrichment(outdir):
 			fp1.write('G'+str(i)+'\t'+str(x)+'\t'+str(y)+'\n')
 
 			df=df.rename(columns={0: 'Disease', 1:'DiseaseGenes',3:'ClusterID',4:'ClusterSize',5:'Common',7:'P-value'})
-			df.to_csv(outdir+'enrichment_modules_G{}.csv'.format(i),sep='\t',index=False)
+			df.to_csv(outdir+'enrichment_modules_{}_G{}_{}.csv'.format(inflation,i,dg_file_name),sep='\t',index=False)
 
 
 
-	df = pd.read_csv(outdir+'NS.txt',sep='\t',header=None)
+	df = pd.read_csv(outdir+'NS_{}.txt'.format(dg_file_name),sep='\t',header=None)
 
 	plt.clf()
 	plt.bar(df[0],df[1])
 	plt.xlabel('Graphlet')
 	plt.xticks(rotation=90)
 	plt.ylabel("No. of significant modules")
-	plt.savefig(outdir+'sig_modules.pdf',format='pdf',bbox_inches='tight')
+	plt.savefig(outdir+'sig_modules_{}.pdf'.format(dg_file_name),format='pdf',bbox_inches='tight')
 
 	plt.clf()
 	plt.bar(df[0],df[2])
 	plt.xlabel('Graphlet')
 	plt.xticks(rotation=90)
 	plt.ylabel("No. of significantly associated diseases")
-	plt.savefig(outdir+'sig_diseases.pdf',format='pdf',bbox_inches='tight')
+	plt.savefig(outdir+'sig_diseases_{}.pdf'.format(dg_file_name),format='pdf',bbox_inches='tight')
 
 
 def main(argv):
 	outdir = argv[1] 
 	dg_file = argv[2]
-	inflation = 4.0
+	inflation = argv[3]
 
 	
 	#if not os.path.exists(outdir):
@@ -226,10 +247,10 @@ def main(argv):
 	#dg_file = '../../data/snap/ppi_DG.tsv'
 	#outdir = '../../out/PP-Pathways_ppi/'
 
-	disease_gene_dict = make_disease_gene_dictionary(dg_file) #key: disease id, value: list of genes
-	disease_name_dict = make_disease_name_dictionary(dg_file) #key: disease id, value: disease name
-	perform_hg_test(disease_name_dict,disease_gene_dict,outdir)
-	perform_enrichment(outdir)
+	dg_file_name = dg_file.split('/')[-1]#.split('.')[0]
+
+	perform_hg_test(dg_file,outdir,inflation,dg_file_name)
+	perform_enrichment(outdir, dg_file_name,inflation)
 
 
 if __name__ == "__main__":
