@@ -2,6 +2,10 @@
 
 This repo contains code for graphlet-based community detection in Protein-Protein Interaction (PPI) netowrks. 
 
+*Identification of Disease Modules Using Higher-Order Network Structure,*
+Pramesh Singh, Hannah Kuder, Anna Ritz
+https://www.biorxiv.org/content/10.1101/2022.12.24.521876v1
+
 ## Directory Contents
 
 - **src**: source code.
